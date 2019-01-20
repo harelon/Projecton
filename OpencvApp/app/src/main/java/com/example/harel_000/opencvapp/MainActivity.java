@@ -15,6 +15,7 @@ import android.view.Window;
 import android.view.WindowManager;
 
 import android.view.SurfaceView;
+
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
@@ -26,9 +27,8 @@ public class MainActivity extends Activity
     private CascadeClassifier cascadeClassifier;
     private Mat grayscaleImage;
     private int absoluteFaceSize;
-    Mat someMat;
-    double placeEarsInFaceHeight = 3/5;
-    double placeEarsInFaceWidth = -1/6;
+    double placeEarsInFaceHeight = 3 / 5;
+    double placeEarsInFaceWidth = -1 / 6;
     int EarRatioHeight = 3;
     int EarRatioWidth = 4;
     Mat earImage;
@@ -90,20 +90,16 @@ public class MainActivity extends Activity
     @Override
     public void onCameraViewStarted(int width, int height) {
         grayscaleImage = new Mat(height, width, CvType.CV_8UC4);
-        someMat=new Mat(480,864,CvType.CV_8UC4);
         // The faces will be a 20% of the height of the screen
         absoluteFaceSize = (int) (height * 0.2);
-        try{
+        try {
             earImage = Utils.loadResource(this, R.drawable.ear3);
-            Log.d("earproblems","cols ="+earImage.cols()+" rows="+earImage.rows()+" type="+earImage.type());
-            Log.d("earproblems","ears loaded");
-            Imgproc.resize(earImage,someMat,new Size(someMat.cols(),someMat.rows()));
+            Log.d("earPlacing", "cols =" + earImage.cols() + " rows=" + earImage.rows() + " type=" + earImage.type());
+            Log.d("earPlacing", "ears loaded");
+        } catch (Exception e) {
+            Log.d("earPlacing", e.toString());
         }
-        catch (Exception e)
-        {
-            Log.d("earproblems",e.toString());
-        }
-        Log.d("earproblems","ears resized");
+        Log.d("earPlacing", "ears resized");
     }
 
     @Override
@@ -114,56 +110,62 @@ public class MainActivity extends Activity
     public Mat onCameraFrame(Mat aInputFrame) {
         // Create a grayscale image
 //        Log.d("ear problems","returning ears");
-        return  someMat;
-//        Mat leftEar=new Mat();
-//        Mat rightEar = new Mat();
-//        Size earSize= new Size(100,100);
-//        Log.d("ears","size ="+earSize.toString());
-//        Imgproc.resize(earImage, leftEar,earSize);
-//        Log.d("ears","ears resized");
-//
-//        Imgproc.cvtColor(aInputFrame, grayscaleImage, Imgproc.COLOR_RGBA2RGB);
-//
-//        MatOfRect faces = new MatOfRect();
-//
-//        // Use the classifier to detect faces
-//        if (cascadeClassifier != null) {
-//            cascadeClassifier.detectMultiScale(grayscaleImage, faces, 1.1, 2, 2,
-//                    new Size(absoluteFaceSize, absoluteFaceSize), new Size());
-//        }
-//
-//        // If there are any faces found, draw a rectangle around it
-//        Rect[] facesArray = faces.toArray();
-//        for(Rect face : facesArray) {
-//            int h=face.height;
-//            int w=face.width;
-//            int x=face.x;
-//            int y=face.y;
-//            if (h <100 ||w<100)
-//            {
-//                continue;
-//            }
-//
-//            earSize= new Size((int)w / EarRatioWidth,(int)h / EarRatioHeight);
-//            Log.d("ears","size ="+earSize.toString());
-//            Imgproc.resize(earImage, leftEar,earSize);
-//            Log.d("ears","ears resized");
-//            Core.flip(leftEar, rightEar,1);
-//            Mat leftEarInvertedMask=new Mat();
-//            Mat rightEarInvertedMask=new Mat();
-//            Imgproc.cvtColor(leftEar, leftEarInvertedMask,Imgproc.COLOR_BGRA2GRAY);
-//            Imgproc.threshold(leftEarInvertedMask,leftEarInvertedMask,1,255,Imgproc.THRESH_BINARY);
-//            Core.flip(leftEarInvertedMask, rightEarInvertedMask,1);
-//            Rect leftEarROI = new Rect(x,y-rightEar.height(),rightEar.width(),rightEar.height());
-//            Rect rightEarROI = new Rect(x+w-leftEar.width(),y-rightEar.height(),rightEar.width(),rightEar.height());
-////            Imgproc.rectangle(aInputFrame, facesArray[i].tl(), facesArray[i].br(), new Scalar(0, 255, 0, 255), 3);
-//        }
-//        return aInputFrame;
+        Imgproc.cvtColor(aInputFrame, grayscaleImage, Imgproc.COLOR_RGBA2RGB);
+
+        MatOfRect faces = new MatOfRect();
+
+        // Use the classifier to detect faces
+        if (cascadeClassifier != null) {
+            cascadeClassifier.detectMultiScale(grayscaleImage, faces, 1.1, 2, 2,
+                    new Size(absoluteFaceSize, absoluteFaceSize), new Size());
+        }
+
+        // If there are any faces found, draw a rectangle around it
+        Rect[] facesArray = faces.toArray();
+        for (Rect face : facesArray) {
+            int h = face.height;
+            int w = face.width;
+            int x = face.x;
+            int y = face.y;
+            if (h < 100 || w < 100) {
+                continue;
+            }
+            Mat leftEar = new Mat((int) h / EarRatioHeight, (int) w / EarRatioWidth, CvType.CV_8UC4);
+            Size earSize = new Size(leftEar.width(), leftEar.height());
+            Mat rightEar = new Mat();
+            Log.d("earPlacing", "size =" + earSize.toString());
+            Imgproc.resize(earImage, leftEar, earSize);
+            Log.d("earPlacing", "ears resized");
+            Core.flip(leftEar, rightEar, 1);
+            Log.d("earPlacing ", "flipped left ear into right ear");
+            Mat leftEarInvertedMask = new Mat(leftEar.width(), leftEar.height(), CvType.CV_8UC4);
+            Mat rightEarInvertedMask = new Mat(leftEar.width(), leftEar.height(), CvType.CV_8UC4);
+            Log.d("earPlacing ", "created both ears inverted mask");
+            Imgproc.cvtColor(leftEar, leftEarInvertedMask, Imgproc.COLOR_BGRA2GRAY);
+            Imgproc.threshold(leftEarInvertedMask, leftEarInvertedMask, 1, 255, Imgproc.THRESH_BINARY_INV);
+            Imgproc.cvtColor(leftEarInvertedMask, leftEarInvertedMask, Imgproc.COLOR_GRAY2BGRA);
+            Log.d("earPlacing ", "actually used the mask");
+            Core.flip(leftEarInvertedMask, rightEarInvertedMask, 1);
+            Log.d("earPlacing ", "flipped left mask into right mask");
+            if (y - leftEar.rows() < 0 || x + w - rightEar.cols() < 0 || x + w - rightEar.cols() < 0 || x + rightEar.cols() > aInputFrame.cols()) {
+                Log.d("earPlacing ", "roi not vaild");
+                continue;
+            }
+            Mat leftEarROI = aInputFrame.submat(y - leftEar.rows(), y, x + w - rightEar.cols(), x + w);
+            Mat rightEarROI = aInputFrame.submat(y - rightEar.rows(), y, x, x + rightEar.cols());
+            Log.d("earPlacing ", "created right ear roi");
+            Core.bitwise_and(rightEarROI, rightEarInvertedMask, rightEarROI);
+            Core.bitwise_or(rightEarROI, rightEar, rightEarROI);
+            Log.d("earPlacing ", "placed ear into rightEarROI");
+            Core.bitwise_and(leftEarROI, leftEarInvertedMask, leftEarROI);
+            Core.bitwise_or(leftEarROI, leftEar, leftEarROI);
+            Log.d("earPlacing ", "placed ear into leftEarROI");
+        }
+        return aInputFrame;
     }
 
     @Override
-    public void onResume()
-    {
+    public void onResume() {
         super.onResume();
         if (!OpenCVLoader.initDebug()) {
             Log.d("OpenCV", "Internal OpenCV library not found. Using OpenCV Manager for initialization");
