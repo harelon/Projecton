@@ -15,29 +15,38 @@ import android.view.Window;
 import android.view.WindowManager;
 
 import android.view.SurfaceView;
+import android.view.View.OnTouchListener;
+import android.view.MotionEvent;
+import android.view.View;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
 
 public class MainActivity extends Activity
-        implements CvCameraViewListener {
+        implements CvCameraViewListener,  OnTouchListener{
 
     private CameraBridgeViewBase openCvCameraView;
     private CascadeClassifier cascadeClassifier;
     private Mat grayscaleImage;
     private int absoluteFaceSize;
+    private int counter=0;
     double placeEarsInFaceHeight = 3 / 5;
     double placeEarsInFaceWidth = -1 / 6;
     int EarRatioHeight = 3;
     int EarRatioWidth = 4;
+    long lastTouch=0;
+    int beardPlacementWidth;
+    int beardPlacementHeight;
     Mat earImage;
+    Mat beardImage;
     private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
         public void onManagerConnected(int status) {
             switch (status) {
                 case LoaderCallbackInterface.SUCCESS:
                     initializeOpenCVDependencies();
+                    openCvCameraView.setOnTouchListener(MainActivity.this);
                     break;
                 default:
                     super.onManagerConnected(status);
@@ -93,7 +102,7 @@ public class MainActivity extends Activity
         // The faces will be a 20% of the height of the screen
         absoluteFaceSize = (int) (height * 0.2);
         try {
-            earImage = Utils.loadResource(this, R.drawable.ear3);
+            earImage = Utils.loadResource(this, R.drawable.ear2);
             Log.d("earPlacing", "cols =" + earImage.cols() + " rows=" + earImage.rows() + " type=" + earImage.type());
             Log.d("earPlacing", "ears loaded");
         } catch (Exception e) {
@@ -104,8 +113,46 @@ public class MainActivity extends Activity
 
     @Override
     public void onCameraViewStopped() {
+
     }
 
+    public boolean onTouch(View v, MotionEvent event) {
+        long currentTouchTime = event.getEventTime();
+        if(!(currentTouchTime>lastTouch+300))
+        {
+            return false;
+        }
+        lastTouch=currentTouchTime;
+
+        int path=R.drawable.ear1;
+        if(counter ==0)
+        {
+            path=R.drawable.ear1;
+            counter++;
+        }
+        else if(counter==1)
+        {
+            path=R.drawable.ear2;
+            counter=0;
+        }
+//        else{
+//            path = R.drawable.beard;
+//        }
+//        if(counter ==30)
+//        {
+//            counter=0;
+//        }
+        try {
+            Log.d("earPlacing", "trying to load ear image");
+            earImage = Utils.loadResource(this, path,Imgcodecs.CV_LOAD_IMAGE_UNCHANGED);
+            Imgproc.cvtColor(earImage, earImage, Imgproc.COLOR_BGR2RGBA);
+        } catch (Exception e) {
+            Log.d("earPlacing", e.toString());
+            return false;
+        }
+        Log.d("earPlacing", "ears swapped successfully");
+        return true;
+    }
     @Override
     public Mat onCameraFrame(Mat aInputFrame) {
         // Create a grayscale image
