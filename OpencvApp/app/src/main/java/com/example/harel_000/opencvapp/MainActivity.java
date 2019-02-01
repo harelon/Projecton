@@ -2,34 +2,24 @@ package com.example.harel_000.opencvapp;
 
 import android.app.Activity;
 import android.content.Context;
+import android.content.pm.ActivityInfo;
+import android.content.res.Configuration;
 import android.os.Bundle;
 import android.util.Log;
-import android.view.WindowManager;
+import android.view.*;
 import org.opencv.android.*;
 import org.opencv.android.CameraBridgeViewBase.CvCameraViewListener;
 import org.opencv.core.*;
 import org.opencv.imgcodecs.*;
 import org.opencv.imgproc.Imgproc;
 import org.opencv.objdetect.CascadeClassifier;
-import android.view.Window;
 import android.view.WindowManager;
 
-import android.view.SurfaceView;
 import android.view.View.OnTouchListener;
-import android.view.MotionEvent;
-import android.view.View;
 
 import java.io.File;
 import java.io.FileOutputStream;
 import java.io.InputStream;
-
-enum Feature {
-    EAR, BEARD
-}
-
-enum SpecificFeature {
-    RABBIT_EARS, CAT_EARS, BROWN_BEARD
-}
 
 public class MainActivity extends Activity
         implements CvCameraViewListener, OnTouchListener {
@@ -39,18 +29,10 @@ public class MainActivity extends Activity
     private CascadeClassifier cascadeSmileClassifier;
     private Mat grayscaleImage;
     private int absoluteFaceSize;
-    double placeEarsInFaceHeight = 3 / 5;
-    double placeEarsInFaceWidth = -1 / 6;
-    int EarRatioHeight = 3;
-    int EarRatioWidth = 4;
+    private IoverlayOnImage[] modes;
+    IoverlayOnImage currentMode;
+    int modeIndex = 0;
     long lastTouch = 0;
-    int beardPlacementWidth;
-    int beardPlacementHeight;
-    Mat filterImage;
-    Feature currentFilter = Feature.EAR;
-    Feature nextFilter = Feature.EAR;
-    private SpecificFeature currentFeature = SpecificFeature.RABBIT_EARS;
-    private SpecificFeature nextFeature = SpecificFeature.RABBIT_EARS;
     private BaseLoaderCallback mLoaderCallback = new BaseLoaderCallback(this) {
         @Override
         public void onManagerConnected(int status) {
@@ -70,6 +52,11 @@ public class MainActivity extends Activity
         // And we are ready to go
         cascadeFaceClassifier = loadCascade(R.raw.lbpcascade_frontalface, "lbpcascade_frontalface.xml");
         cascadeSmileClassifier = loadCascade(R.raw.haarcascade_smile, "haarcascade_smile.xml");
+        modes = new IoverlayOnImage[3];
+        modes[0] = new EarMode(loadImage(R.drawable.ear1));
+        modes[1] = new EarMode(loadImage(R.drawable.ear2));
+        modes[2] = new BeardMode(loadImage(R.drawable.beard2));
+        currentMode = modes[modeIndex];
         openCvCameraView.enableView();
     }
 
@@ -115,50 +102,11 @@ public class MainActivity extends Activity
         grayscaleImage = new Mat(height, width, CvType.CV_8UC4);
         // The faces will be a 20% of the height of the screen
         absoluteFaceSize = (int) (height * 0.2);
-        LoadImage(true);
-        Log.d("featurePlacing", "image didn't change loading settings");
     }
 
-    public void LoadImage(boolean OnStart) {
-        if (!OnStart) {
-            currentFeature = nextFeature;
-            currentFilter = nextFilter;
-        }
-        Log.d("featurePlacing", currentFeature.name());
-        int path = 0;
-        try {
-            switch (currentFilter) {
-                case EAR:
-                    switch (currentFeature) {
-                        case RABBIT_EARS:
-                            path = R.drawable.ear1;
-                            Log.d("featurePlacing", "current path ear1");
-                            nextFeature = SpecificFeature.CAT_EARS;
-                            Log.d("featurePlacing", "next image cat ears");
-                            break;
-                        case CAT_EARS:
-                            path = R.drawable.ear2;
-                            Log.d("featurePlacing", "current path ear2");
-                            nextFeature = SpecificFeature.BROWN_BEARD;
-                            nextFilter = Feature.BEARD;
-                            Log.d("featurePlacing", "next image brown beard");
-                            break;
-                    }
-                    break;
-                case BEARD:
-                    path = R.drawable.beard2;
-                    Log.d("featurePlacing", "current path beard");
-                    nextFeature = SpecificFeature.RABBIT_EARS;
-                    nextFilter = Feature.EAR;
-                    Log.d("featurePlacing", "next image rabbit ears");
-                    break;
-            }
-            filterImage = Utils.loadResource(this, path);
-            Imgproc.cvtColor(filterImage, filterImage, Imgproc.COLOR_BGR2RGBA);
-        } catch (Exception e) {
-            Log.d("featurePlacing", e.toString());
-        }
-        Log.d("featurePlacing", "feature swapped successfully");
+    public void switchImage() {
+        modeIndex = (modeIndex + 1) % modes.length;
+        currentMode = modes[modeIndex];
     }
 
     @Override
@@ -173,7 +121,7 @@ public class MainActivity extends Activity
         }
         lastTouch = currentTouchTime;
         Log.d("featurePlacing", "sensed touch successfully");
-        LoadImage(false);
+        switchImage();
         Log.d("featurePlacing", "image updated successfully");
         return true;
     }
@@ -191,77 +139,8 @@ public class MainActivity extends Activity
                     new Size(absoluteFaceSize, absoluteFaceSize), new Size());
         }
         Rect[] detectedArray = detectedMats.toArray();
-        if (currentFilter == Feature.EAR) {
-            for (Rect face : detectedArray) {
-                int h = face.height;
-                int w = face.width;
-                int x = face.x;
-                int y = face.y;
-                if (h < 10 || w < 10) {
-                    continue;
-                }
-                Mat leftEar = new Mat((int) h / EarRatioHeight, (int) w / EarRatioWidth, CvType.CV_8UC4);
-                Mat rightEar = new Mat();
-                Log.d("earPlacing", "size =" + leftEar.size().toString());
-                Log.d("earPlacing", filterImage.size().toString());
-                Imgproc.resize(filterImage, leftEar, leftEar.size());
-                Log.d("earPlacing", "ears resized");
-                Core.flip(leftEar, rightEar, 1);
-                Log.d("earPlacing ", "flipped left ear into right ear");
-                Mat leftEarInvertedMask = new Mat(leftEar.width(), leftEar.height(), CvType.CV_8UC4);
-                Mat rightEarInvertedMask = new Mat(leftEar.width(), leftEar.height(), CvType.CV_8UC4);
-                Log.d("earPlacing ", "created both ears inverted mask");
-                Imgproc.cvtColor(leftEar, leftEarInvertedMask, Imgproc.COLOR_RGBA2GRAY);
-                Imgproc.threshold(leftEarInvertedMask, leftEarInvertedMask, 1, 255, Imgproc.THRESH_BINARY_INV);
-                Imgproc.cvtColor(leftEarInvertedMask, leftEarInvertedMask, Imgproc.COLOR_GRAY2RGBA);
-                Log.d("earPlacing ", "actually used the mask");
-                Core.flip(leftEarInvertedMask, rightEarInvertedMask, 1);
-                Log.d("earPlacing ", "flipped left mask into right mask");
-                if (y - leftEar.rows() < 0 || x + w - rightEar.cols() < 0 || x + w - rightEar.cols() < 0 || x + rightEar.cols() > aInputFrame.cols()) {
-                    Log.d("earPlacing ", "roi not vaild");
-                    continue;
-                }
-                Mat leftEarROI = aInputFrame.submat(y - leftEar.rows(), y, x + w - rightEar.cols(), x + w);
-                Mat rightEarROI = aInputFrame.submat(y - rightEar.rows(), y, x, x + rightEar.cols());
-                Log.d("earPlacing ", "created right ear roi");
-                Core.bitwise_and(rightEarROI, rightEarInvertedMask, rightEarROI);
-                Core.bitwise_or(rightEarROI, rightEar, rightEarROI);
-                Log.d("earPlacing ", "placed ear into rightEarROI");
-                Core.bitwise_and(leftEarROI, leftEarInvertedMask, leftEarROI);
-                Core.bitwise_or(leftEarROI, leftEar, leftEarROI);
-                Log.d("earPlacing ", "placed ear into leftEarROI");
-            }
-        } else if (currentFilter == Feature.BEARD) {
-            for (Rect smile : detectedArray) {
-                int h = smile.height;
-                int w = smile.width;
-                int x = smile.x;
-                int y = smile.y;
-                if (h < 200 || w < 200) {
-                    continue;
-                }
-                Mat beard = new Mat((int) h, (int) w, CvType.CV_8UC4);
-                Imgproc.resize(filterImage, beard, beard.size());
-                Log.d("beardPlacing", "beard resized");
-                Mat beardInvertedMask = new Mat(beard.width(), beard.height(), CvType.CV_8UC4);
-                Log.d("beardPlacing ", "created beard inverted mask");
-                Imgproc.cvtColor(beard, beardInvertedMask, Imgproc.COLOR_RGBA2GRAY);
-                Imgproc.threshold(beardInvertedMask, beardInvertedMask, 1, 255, Imgproc.THRESH_BINARY_INV);
-                Imgproc.cvtColor(beardInvertedMask, beardInvertedMask, Imgproc.COLOR_GRAY2RGBA);
-                Log.d("beardPlacing ", "converted beard color");
-                if (y + h - beard.rows()*2/3< 0 || y + h- beard.rows()*2/3 +beard.cols() > aInputFrame.rows() || x + beard.cols() > aInputFrame.cols()) {
-                    Log.d("beardPlacing ", "roi not vaild");
-                    continue;
-                }
-                Mat beardROI = aInputFrame.submat(y + h - beard.rows()*2/3, y + h- beard.rows()*2/3 +beard.cols(), x, x + beard.cols());
-                Log.d("beardPlacing ", "got matching beardROI");
-                Log.d("beardPlacing", beardROI.size().toString());
-                Log.d("beardPlacing", aInputFrame.size().toString());
-                Core.bitwise_and(beardROI, beardInvertedMask, beardROI);
-                Log.d("beardPlacing", "used and on inverted mask and roi");
-                Core.bitwise_or(beardROI, beard, beardROI);
-                Log.d("beardPlacing", "placed beard into beardROI");
-            }
+        for (Rect face : detectedArray) {
+            currentMode.overlayOnImage(aInputFrame, face);
         }
         return aInputFrame;
     }
@@ -276,5 +155,16 @@ public class MainActivity extends Activity
             Log.d("OpenCV", "OpenCV library found inside package. Using it!");
             mLoaderCallback.onManagerConnected(LoaderCallbackInterface.SUCCESS);
         }
+    }
+
+    public Mat loadImage(int imagePath) {
+        Mat ImageLoaded = new Mat();
+        try {
+            ImageLoaded = Utils.loadResource(this, imagePath);
+            Imgproc.cvtColor(ImageLoaded, ImageLoaded, Imgproc.COLOR_BGR2RGBA);
+        } catch (Exception e) {
+
+        }
+        return ImageLoaded;
     }
 }
